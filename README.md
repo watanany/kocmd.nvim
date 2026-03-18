@@ -8,25 +8,42 @@
 - タブごとに状態を保持（バッファ内容を維持したまま開閉可能）
 - ウィンドウ位置: `top` / `bottom` / `left` / `right` / `float`
 
-## セットアップ
+## セットアップ (lazy.nvim)
 
 ```lua
-require("kocmd").setup({
-  commands = {
-    term = {
-      cmd = "terminal",
-      position = "bottom",
-      size = 20,
-    },
-    lazygit = {
-      cmd = function()
-        vim.fn.termopen("lazygit")
-      end,
-      position = "float",
-      size = { width = 0.9, height = 0.9 },
+{
+  "watanany/kocmd.nvim",
+  keys = {
+    { "<Leader>ot", function() require("kocmd").toggle("shell") end, desc = "Toggle shell" },
+    { "<Leader>og", function() require("kocmd").toggle("lazygit") end, desc = "Toggle lazygit" },
+    { "<Leader>od", function() require("kocmd").toggle("lazydocker") end, desc = "Toggle lazydocker" },
+    { "<Leader>oc", function() require("kocmd").toggle("claude") end, desc = "Toggle claude" },
+  },
+  opts = {
+    commands = {
+      shell = {
+        cmd = function() vim.cmd("term") end,
+        position = "bottom",
+        size = 20,
+      },
+      claude = {
+        cmd = function() vim.cmd("term claude") end,
+        position = "left",
+        size = 60,
+      },
+      lazygit = {
+        cmd = function() vim.cmd("term lazygit") end,
+        position = "float",
+        size = { width = 0.95, height = 0.95 },
+      },
+      lazydocker = {
+        cmd = function() vim.cmd("term lazydocker") end,
+        position = "float",
+        size = { width = 0.95, height = 0.95 },
+      },
     },
   },
-})
+}
 ```
 
 ### コマンド設定
@@ -40,10 +57,6 @@ require("kocmd").setup({
 ## 使い方
 
 ```vim
-:Kocmd term
+:Kocmd shell
 :Kocmd lazygit
-```
-
-```lua
-vim.keymap.set("n", "<Leader>ot", function() require("kocmd").toggle("term") end)
 ```
