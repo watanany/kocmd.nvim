@@ -55,14 +55,6 @@ local function fix_size(win, position)
   end
 end
 
-local function exec_cmd(cmd)
-  if type(cmd) == "function" then
-    cmd()
-  elseif type(cmd) == "string" then
-    vim.cmd(cmd)
-  end
-end
-
 local function create_window(cmd_conf, name, tab)
   local position = cmd_conf.position or "bottom"
   local size = cmd_conf.size or 20
@@ -70,16 +62,16 @@ local function create_window(cmd_conf, name, tab)
 
   if position == "float" then
     win, buf = open_float(type(size) == "table" and size or { width = 0.8, height = 0.8 })
-    exec_cmd(cmd_conf.cmd)
-    buf = vim.api.nvim_get_current_buf()
   else
     open_split(position, size)
     win = vim.api.nvim_get_current_win()
     fix_size(win, position)
-    exec_cmd(cmd_conf.cmd)
-    buf = vim.api.nvim_get_current_buf()
+    vim.cmd("enew")
   end
 
+  vim.fn.termopen(cmd_conf.cmd)
+  buf = vim.api.nvim_get_current_buf()
+  vim.api.nvim_set_option_value("bufhidden", "hide", { buf = buf })
   set_state(name, tab, { win = win, buf = buf })
 end
 
@@ -124,8 +116,8 @@ function M.toggle(name)
   local tab = vim.api.nvim_get_current_tabpage()
   local state = get_state(name, tab)
 
-  local win_valid = state and vim.api.nvim_win_is_valid(state.win)
-  local buf_valid = state and vim.api.nvim_buf_is_valid(state.buf)
+  local win_valid = state and state.win and vim.api.nvim_win_is_valid(state.win)
+  local buf_valid = state and state.buf and vim.api.nvim_buf_is_valid(state.buf)
 
   if win_valid and buf_valid then
     vim.api.nvim_win_close(state.win, true)

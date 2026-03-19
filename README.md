@@ -22,22 +22,22 @@
   opts = {
     commands = {
       shell = {
-        cmd = function() vim.cmd("term") end,
+        cmd = vim.o.shell,
         position = "bottom",
         size = 20,
       },
       claude = {
-        cmd = function() vim.cmd("term claude") end,
+        cmd = "claude",
         position = "left",
         size = 60,
       },
       lazygit = {
-        cmd = function() vim.cmd("term lazygit") end,
+        cmd = "lazygit",
         position = "float",
         size = { width = 0.95, height = 0.95 },
       },
       lazydocker = {
-        cmd = function() vim.cmd("term lazydocker") end,
+        cmd = "lazydocker",
         position = "float",
         size = { width = 0.95, height = 0.95 },
       },
@@ -50,7 +50,7 @@
 
 | キー       | 説明                              | デフォルト   |
 | ---------- | --------------------------------- | ------------ |
-| `cmd`      | 実行コマンド（文字列 or 関数）    | 必須         |
+| `cmd`      | シェルコマンド（文字列）          | 必須         |
 | `position` | ウィンドウ位置                    | `"bottom"`   |
 | `size`     | サイズ（行/列数、floatは比率も可）| `20`         |
 
