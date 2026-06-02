@@ -7,6 +7,8 @@ M.config = {
 -- per-command state: { [name] = { [tab] = { win = win_id, buf = buf_id } } }
 local states = {}
 
+local augroup_name = "Kocmd"
+
 local function get_state(name, tab)
   return states[name] and states[name][tab]
 end
@@ -66,13 +68,33 @@ local function create_window(cmd_conf, name, tab)
     open_split(position, size)
     win = vim.api.nvim_get_current_win()
     fix_size(win, position)
-    vim.cmd("enew")
+    -- keepalt で alternate file を汚さない (reopen_window の keepalt buffer と一貫)
+    vim.cmd("keepalt enew")
   end
 
-  vim.fn.termopen(cmd_conf.cmd)
+  -- Neovim 0.10+ で termopen は deprecated。jobstart の term=true に置き換え
+  vim.fn.jobstart(cmd_conf.cmd, { term = true })
   buf = vim.api.nvim_get_current_buf()
   vim.api.nvim_set_option_value("bufhidden", "hide", { buf = buf })
   set_state(name, tab, { win = win, buf = buf })
+
+  -- シェル exit 時に state とバッファを破棄して死んだ terminal の再表示を防ぐ
+  -- (bufhidden=hide のため、明示クリーンしないとプロセス無しのバッファが残り続ける)
+  vim.api.nvim_create_autocmd("TermClose", {
+    group = augroup_name,
+    buffer = buf,
+    once = true,
+    callback = function()
+      vim.schedule(function()
+        if vim.api.nvim_buf_is_valid(buf) then
+          vim.api.nvim_buf_delete(buf, { force = true })
+        end
+        if states[name] then
+          states[name][tab] = nil
+        end
+      end)
+    end,
+  })
 end
 
 local function reopen_window(cmd_conf, name, tab, buf)
@@ -140,9 +162,35 @@ local function setup_commands()
   })
 end
 
+-- タブを閉じた時、そのタブに紐付いた state とバッファを掃除する
+-- (state は tabpage handle で keyed のため、放置すると無効ハンドルのエントリが溜まる)
+local function setup_autocmds()
+  vim.api.nvim_create_autocmd("TabClosed", {
+    group = augroup_name,
+    callback = function()
+      local alive = {}
+      for _, t in ipairs(vim.api.nvim_list_tabpages()) do
+        alive[t] = true
+      end
+      for _, by_tab in pairs(states) do
+        for tab, state in pairs(by_tab) do
+          if not alive[tab] then
+            if state.buf and vim.api.nvim_buf_is_valid(state.buf) then
+              pcall(vim.api.nvim_buf_delete, state.buf, { force = true })
+            end
+            by_tab[tab] = nil
+          end
+        end
+      end
+    end,
+  })
+end
+
 function M.setup(user_prefs)
   M.config = vim.tbl_deep_extend("force", M.config, user_prefs or {})
+  vim.api.nvim_create_augroup(augroup_name, { clear = true })
   setup_commands()
+  setup_autocmds()
 end
 
 return M
