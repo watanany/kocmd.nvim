@@ -1,0 +1,10 @@
+{
+  "$schema": "https://raw.githubusercontent.com/LuaLS/vscode-lua/master/setting/schema.json",
+  "runtime": { "version": "LuaJIT" },
+  "diagnostics": { "globals": ["vim"] },
+  "workspace": {
+    "library": ["/opt/homebrew/share/nvim/runtime/lua"],
+    "checkThirdParty": false
+  },
+  "type": { "weakUnionCheck": true, "castNumberToInteger": true }
+}

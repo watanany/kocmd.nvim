@@ -1,18 +1,44 @@
+---@alias KocmdPosition "top"|"bottom"|"left"|"right"|"float"
+
+---@class KocmdFloatSize
+---@field width? number 画面幅に対する比率 (0.0-1.0)
+---@field height? number 画面高に対する比率 (0.0-1.0)
+
+---@class KocmdCommand
+---@field cmd string|string[] jobstart に渡すコマンド
+---@field position? KocmdPosition 既定値は "bottom"
+---@field size? integer|KocmdFloatSize split は行数/列数、float は KocmdFloatSize。既定値は 20
+
+---@class KocmdConfig
+---@field commands table<string, KocmdCommand>
+
+---@class KocmdState
+---@field win? integer
+---@field buf? integer
+
 local M = {}
 
+---@type KocmdConfig
 M.config = {
   commands = {},
 }
 
 -- per-command state: { [name] = { [tab] = { win = win_id, buf = buf_id } } }
+---@type table<string, table<integer, KocmdState>>
 local states = {}
 
 local augroup_name = "Kocmd"
 
+---@param name string
+---@param tab integer tabpage handle
+---@return KocmdState|nil
 local function get_state(name, tab)
   return states[name] and states[name][tab]
 end
 
+---@param name string
+---@param tab integer tabpage handle
+---@param state KocmdState
 local function set_state(name, tab, state)
   if not states[name] then
     states[name] = {}
@@ -20,6 +46,8 @@ local function set_state(name, tab, state)
   states[name][tab] = state
 end
 
+---@param position KocmdPosition
+---@param size integer
 local function open_split(position, size)
   local cmds = {
     top = string.format("topleft split | resize %d", size),
@@ -30,6 +58,9 @@ local function open_split(position, size)
   vim.cmd(cmds[position] or cmds.bottom)
 end
 
+---@param size KocmdFloatSize
+---@return integer win
+---@return integer buf
 local function open_float(size)
   local width = math.floor(vim.o.columns * (size.width or 0.8))
   local height = math.floor(vim.o.lines * (size.height or 0.8))
@@ -49,6 +80,8 @@ local function open_float(size)
   return win, buf
 end
 
+---@param win integer
+---@param position KocmdPosition
 local function fix_size(win, position)
   if position == "left" or position == "right" then
     vim.api.nvim_set_option_value("winfixwidth", true, { win = win })
@@ -57,15 +90,19 @@ local function fix_size(win, position)
   end
 end
 
+---@param cmd_conf KocmdCommand
+---@param name string
+---@param tab integer tabpage handle
 local function create_window(cmd_conf, name, tab)
   local position = cmd_conf.position or "bottom"
   local size = cmd_conf.size or 20
+  ---@type integer, integer
   local win, buf
 
   if position == "float" then
     win, buf = open_float(type(size) == "table" and size or { width = 0.8, height = 0.8 })
   else
-    open_split(position, size)
+    open_split(position, size --[[@as integer]])
     win = vim.api.nvim_get_current_win()
     fix_size(win, position)
     -- keepalt で alternate file を汚さない (reopen_window の keepalt buffer と一貫)
@@ -99,9 +136,14 @@ local function create_window(cmd_conf, name, tab)
   })
 end
 
+---@param cmd_conf KocmdCommand
+---@param name string
+---@param tab integer tabpage handle
+---@param buf integer 再利用する terminal バッファ
 local function reopen_window(cmd_conf, name, tab, buf)
   local position = cmd_conf.position or "bottom"
   local size = cmd_conf.size or 20
+  ---@type integer
   local win
 
   if position == "float" then
@@ -121,7 +163,7 @@ local function reopen_window(cmd_conf, name, tab, buf)
       border = "rounded",
     })
   else
-    open_split(position, size)
+    open_split(position, size --[[@as integer]])
     win = vim.api.nvim_get_current_win()
     fix_size(win, position)
     vim.cmd(string.format("keepalt buffer %d", buf))
@@ -130,6 +172,7 @@ local function reopen_window(cmd_conf, name, tab, buf)
   set_state(name, tab, { win = win, buf = buf })
 end
 
+---@param name string M.config.commands のキー
 function M.toggle(name)
   local cmd_conf = M.config.commands[name]
   if not cmd_conf then
@@ -138,16 +181,16 @@ function M.toggle(name)
   end
 
   local tab = vim.api.nvim_get_current_tabpage()
-  local state = get_state(name, tab)
+  local state = get_state(name, tab) or {}
 
-  local win_valid = state and state.win and vim.api.nvim_win_is_valid(state.win)
-  local buf_valid = state and state.buf and vim.api.nvim_buf_is_valid(state.buf)
+  local win = state.win and vim.api.nvim_win_is_valid(state.win) and state.win or nil
+  local buf = state.buf and vim.api.nvim_buf_is_valid(state.buf) and state.buf or nil
 
-  if win_valid and buf_valid then
-    vim.api.nvim_win_close(state.win, true)
-    set_state(name, tab, { buf = state.buf })
-  elseif not win_valid and buf_valid then
-    reopen_window(cmd_conf, name, tab, state.buf)
+  if win and buf then
+    vim.api.nvim_win_close(win, true)
+    set_state(name, tab, { buf = buf })
+  elseif buf then
+    reopen_window(cmd_conf, name, tab, buf)
   else
     create_window(cmd_conf, name, tab)
   end
@@ -165,11 +208,11 @@ local function setup_commands()
 end
 
 -- タブを閉じた時、そのタブに紐付いた state とバッファを掃除する
--- (state は tabpage handle で keyed のため、放置すると無効ハンドルのエントリが溜まる)
 local function setup_autocmds()
   vim.api.nvim_create_autocmd("TabClosed", {
     group = augroup_name,
     callback = function()
+      ---@type table<integer, boolean>
       local alive = {}
       for _, t in ipairs(vim.api.nvim_list_tabpages()) do
         alive[t] = true
@@ -188,6 +231,7 @@ local function setup_autocmds()
   })
 end
 
+---@param user_prefs? KocmdConfig
 function M.setup(user_prefs)
   M.config = vim.tbl_deep_extend("force", M.config, user_prefs or {})
   vim.api.nvim_create_augroup(augroup_name, { clear = true })
