@@ -76,6 +76,8 @@ local function create_window(cmd_conf, name, tab)
   vim.fn.jobstart(cmd_conf.cmd, { term = true })
   buf = vim.api.nvim_get_current_buf()
   vim.api.nvim_set_option_value("bufhidden", "hide", { buf = buf })
+  vim.api.nvim_set_option_value("filetype", "kocmd", { buf = buf })
+  vim.b[buf].kocmd_name = name
   set_state(name, tab, { win = win, buf = buf })
 
   -- シェル exit 時に state とバッファを破棄して死んだ terminal の再表示を防ぐ
